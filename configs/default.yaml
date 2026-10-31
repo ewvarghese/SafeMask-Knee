@@ -1,0 +1,46 @@
+# Paths for the required release files are relative to --release.
+paths:
+  soft_labels: accuracy_soft_labels.csv
+  confidence: accuracy_confidence.csv
+  accepted60: accuracy_accepted60.csv
+  metadata: null                   # auto-discover one metadata CSV/JSON; null if absent
+  evaluation: null                 # auto-discover one expert/evaluation CSV/JSON
+  output_root: outputs
+# Explicit source-column overrides (null => auto-detect); see README for wide overrides.
+columns:
+  study_id: null
+  finding: null
+  soft_score: null
+  confidence: null
+  accepted60: null
+  expert_label: null
+  predicted_label: null
+  findings: {}                     # canonical finding name: source column name in wide files
+seed: 20261101
+outer_folds: 5
+propensity_folds: 5
+platt_calibration_fraction: 0.20
+propensity_floor: 0.02
+weight_min: 0.1
+weight_max: 10.0
+bootstrap_repetitions: 1000
+proxy_coverage: 0.60
+coverage_target: 0.60
+accepted_accuracy_target: 0.97
+# risk_bound: class-conditional marginal risk, NOT error conditional on acceptance.
+# Tier 1: P(accepted negative | expert positive) <= 0.01, under exchangeability.
+# Tier 2/3: BOTH class-conditional marginal misclassification risks <= risk_bound.
+# For Tier 1 the additional bound is P(accepted positive | expert negative).
+tiers:
+  1:
+    findings: [ACL, MCL, Contusion, Fracture]
+    risk_bound: 0.01
+    false_positive_bound: 0.10
+  2:
+    findings: [Medial Meniscus, Lateral Meniscus, Effusion]
+    risk_bound: 0.12
+    false_positive_bound: 0.12
+  3:
+    findings: [Medial OA, Lateral OA, PF OA, "Baker's cyst"]
+    risk_bound: 0.20
+    false_positive_bound: 0.20

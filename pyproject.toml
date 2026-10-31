@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools==75.8.2", "wheel==0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safemask-knee"
+version = "0.1.0"
+description = "Research-only study-grouped audit and selective-label toolkit for RSNA knee MRI label releases"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "SafeMask-Knee contributors"}]
+keywords = ["research", "statistics", "selective labels", "knee MRI", "conformal"]
+classifiers = ["Programming Language :: Python :: 3", "License :: OSI Approved :: MIT License", "Topic :: Scientific/Engineering :: Information Analysis"]
+dependencies = [
+  "numpy==2.2.6", "pandas==2.2.3", "scikit-learn==1.6.1",
+  "scipy==1.15.3", "PyYAML==6.0.2", "matplotlib==3.10.1",
+  "joblib==1.4.2",
+]
+
+[project.optional-dependencies]
+all = ["statsmodels==0.14.4", "click==8.1.8"]
+test = ["pytest==8.3.5"]
+
+[project.scripts]
+safemask-knee = "safemask_knee.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["safemask_knee*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

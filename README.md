@@ -12,20 +12,34 @@ For research only; not for clinical use; requires expert radiologist oversight; 
 > expert review.** A statistically selective mask is not a radiologist's diagnosis.
 > In particular, a rejected finding is **unknown**, not a verified negative.
 
-## Supplied archive: trained label-free components, NOT an image model
+## Run the bundled archive now (CPU, no expert truth)
 
-The user's new `archive.zip` was fetched from this repository's `main` without
-switching this working branch. All **26** published archive-member SHA-256
-hashes matched `FILES.json`; the needed CSVs and notices were extracted only to
-Git-ignored `data/release/`. The archive's `expert_oof.csv` contains 58-study
-**predictions, not expert labels**; its dataset card explicitly says the official
-expert answer key is **not redistributed**. Its curated predictions are **CC
-BY-NC 4.0**, while original Kaggle/RSNA data have separate terms. The MIT
-license applies to toolkit code, not to the source or derived label artifacts.
+From the repository root:
 
 ```bash
+bash scripts/run_release.sh
+```
+
+On a fresh checkout, this one command creates a local `.venv`, installs pinned
+requirements if missing (installation may access a package index), checks the
+**bundled** `archive.zip` SHA-256 and all **26** member hashes against
+`FILES.json`, extracts only required inputs into Git-ignored `data/release/`,
+and runs label-free training. Subsequent runs reuse the verified local inputs.
+It writes a JSON status to `outputs/training_summary.json`, weights to
+`outputs/debiased_training_weights.csv`, and the report to
+`reports/summary.md`. Runtime verification and training use **no network**.
+If dependencies are already installed and you prefer separate steps:
+
+```bash
+python scripts/bootstrap_release.py --archive archive.zip --out data/release
 python -m safemask_knee train --release data/release --config configs/default.yaml
 ```
+
+The bundled archive's `expert_oof.csv` contains 58-study **predictions, not
+expert labels**; its dataset card explicitly says the official expert answer
+key is **not redistributed**. Curated predictions are **CC BY-NC 4.0**, while
+original Kaggle/RSNA data have separate terms. The MIT license applies to
+toolkit code, not to source or derived label artifacts.
 
 This actually fits five study/duplicate-report-group-held-out Platt-calibrated
 acceptance models, estimates IPCW, and writes

@@ -1,5 +1,9 @@
 # Generated artifacts
 
+On a fresh checkout, run `bash scripts/run_release.sh` to verify/extract the
+bundled `archive.zip`, install missing dependencies, and run the prediction-only
+training stage. It also saves the CLI JSON result to `training_summary.json`.
+
 `python -m safemask_knee train --release data/release --config configs/default.yaml`
 needs **no expert truth** and fits grouped acceptance propensities, writes
 `schema.json`, `data_manifest.json`, the label-free `audit/`,

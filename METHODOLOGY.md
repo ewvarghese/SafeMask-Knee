@@ -234,3 +234,80 @@ strong class imbalance and pseudo-label error all limit inference. A
 statistical guarantee (when assumptions hold) is **not** a clinical guarantee.
 
 For research only; not for clinical use; requires expert radiologist oversight; statistical guarantees are not clinical guarantees.
+
+## 5. Preflight, aggregate quality, and provenance
+
+`doctor` checks exact pinned direct dependencies, the known archive SHA-256,
+strict source schema, licence notices, write permissions, missing expert truth
+and staleness of prior source/config hashes **before fitting**. It reports
+`ready_label_free_only` on the bundled archive; that is a successful
+preflight for `train`, **not** permission to run `all`. The archived
+`expert_oof.csv` holds predictions, never official ground truth.
+
+`quality` uses only the validated long table and emits aggregate study/finding
+counts, acceptance/score ranges, metadata missingness, connected patient and
+normalized-report CV clusters, identical score vectors, and upstream teacher
+exposure warnings. Duplicate reports across different study IDs are clustered
+in splits. This cannot detect different reports of the same unknown patient,
+and identical score vectors are not proof of patient identity. No raw study
+IDs or study-level labels occur in the quality report. `run_provenance.json`
+records input names/SHA-256 sizes, Git commit, canonical config/file hash,
+seed, timestamp, Python/platform and pinned/installed package versions; it
+omits source rows and protected metadata. Report/sensitivity/external commands
+reject saved outputs from a different input manifest or validated config.
+
+## 6. Weight-clipping sensitivity is not MNAR identification
+
+The sensitivity grid recomputes accepted-only stabilized weights for floors
+at/above the fitted `propensity_floor` and caps 3/5/10 (plus the configured
+baseline if different), using **the same outer-study-held-out propensity** and
+training-fold prior. It clips and rescales to mean one **within each finding**
+under each cap. The raw fold prior is reconstructed only for accepted rows as
+`weight_raw * fitted_clipped_propensity`. Lower floors are rejected: once the
+underlying probability has been clipped, its value below the original floor
+cannot be recovered. ESS, upper-weight quantiles and cap fractions diagnose
+variance/overlap but never compare correctness. Higher ESS does not imply
+lower label error, MNAR correction, or clinical utility. The confidence-ranked
+source mask has little support for some rejected regions; no floor/cap restores
+missing expert outcomes there.
+
+## 7. Additional score/answer cohort (only with a licensed gold source)
+
+The `external-evaluate` workflow requires the completed *official-label*
+`all` stage and a separate release-shaped directory of **new** score,
+confidence and acceptance CSVs, plus a separately held truth CSV/JSON. Every
+external study must have all eleven findings. The tool rejects any external
+study UID appearing anywhere in the original release, as well as known
+patient/report-group overlap with development studies. It checks that saved
+full-panel conformal cutoffs match the original config/source and applies
+those cutoffs **before joining the external answers**; no external outcome
+trains a threshold. It reports aggregate per-finding and overall released-mask
+versus frozen-mask metrics with study/patient/report-cluster bootstrap CIs,
+plus hashes of the external inputs. External IDs and answers remain local.
+
+**Independence is not proven by distinct UIDs.** The user must independently
+verify that score generation was frozen and did not use external answers or
+upstream exposure. If patient/report metadata are missing, unknown overlaps
+remain possible. Even an added expert cohort cannot turn these observational
+scores into a validated MRI image model or 1%-risk certificate. This workflow
+is unexecutable on the bundled archive alone, which has no official expert
+key and no truly unseen scored/answered cohort.
+
+## 8. Dashboard and GitHub automation boundary
+
+The dashboard has an HTTP allowlist: `/`, `/api/summary` and `/healthz` only.
+It reads **aggregate** quality, propensity and sensitivity outputs; no raw
+file serving, CSV download route, patient IDs or image predictions are exposed.
+Small operational strata (<5 studies) and demographics/site categories are
+not sent through its API. It defaults to loopback; a forwarded Codespaces
+preview should remain private. This is a research monitor, not a clinical UI.
+
+CI runs the pinned tests on pushes/PRs; only manual `workflow_dispatch`
+initiates the bundled label-free training. Its downloadable artifact is an
+allowlisted aggregate-only JSON with no source rows, weights, masks or
+external IDs. CI does **not** publish restricted source or derived CSVs. The
+Codespaces container installs dependencies and locally verifies/extracts the
+archive; initial installation may require internet, but toolkit runtime does
+not. Source CC BY-NC 4.0 and third-party Kaggle terms still apply.
+
+For research only; not for clinical use; requires expert radiologist oversight; statistical guarantees are not clinical guarantees.

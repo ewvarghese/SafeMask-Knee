@@ -55,6 +55,11 @@ def test_cli_all_generates_exact_schemas_and_reports(release_dir: Path,
                      "accepted_clinical"].eq(0).all()
     assert (tmp_path / "reports/summary.md").exists()
     for path in (root / "schema.json", root / "data_manifest.json",
+                 root / "run_provenance.json", root / "quality/data_quality.json",
+                 root / "quality/data_quality.md",
+                 root / "sensitivity/sensitivity_report.md",
+                 root / "sensitivity/sensitivity_by_finding.csv",
+                 root / "sensitivity/sensitivity_overview.csv",
                  tmp_path / "data/manifest.json", root / "audit/bias_table.csv",
                  root / "audit/fairness_table.csv", root / "audit/audit_report.md",
                  root / "evaluation/metrics_by_strategy.csv",
@@ -77,6 +82,10 @@ def test_cli_all_generates_exact_schemas_and_reports(release_dir: Path,
     # The exact disclaimer belongs to each narrative report and report table;
     # exact-schema downstream CSVs are exempt (their 'reason' must stay short).
     for path in (root / "audit/audit_report.md", root / "evaluation/eval_report.md",
+                 root / "run_provenance.json", root / "quality/data_quality.md",
+                 root / "quality/data_quality.json",
+                 root / "sensitivity/sensitivity_report.md",
+                 root / "sensitivity/sensitivity_by_finding.csv",
                  tmp_path / "reports/summary.md", root / "reports/summary.md",
                  root / "audit/bias_table.csv", root / "audit/fairness_table.csv",
                  root / "evaluation/metrics_by_strategy.csv",
@@ -125,11 +134,19 @@ def test_cli_all_generates_exact_schemas_and_reports(release_dir: Path,
     stale = _run(["report", "--release", str(copied),
                   "--config", str(config_path), "--out", "reports/summary.md"], tmp_path)
     assert stale.returncode != 0 and "Release inputs changed" in stale.stderr
+    # A standalone schema/quality inspection must not replace the manifest
+    # over previously fitted weights and make the report appear current.
+    schema_changed = _run(["schema", "--release", str(copied),
+                           "--config", str(config_path)], tmp_path)
+    assert schema_changed.returncode != 0 and "Release inputs changed" in schema_changed.stderr
+    assert json.loads((root / "data_manifest.json").read_text()) == manifest
 
 
 def test_every_help_contains_disclaimer(tmp_path: Path) -> None:
-    for command in ([], ["schema"], ["audit"], ["weights"], ["masks"],
-                    ["evaluate"], ["report"], ["train"], ["all"]):
+    for command in ([], ["doctor"], ["schema"], ["quality"], ["audit"],
+                    ["weights"], ["sensitivity"], ["masks"], ["evaluate"],
+                    ["external-evaluate"], ["report"], ["train"], ["all"],
+                    ["dashboard"]):
         result = _run([*command, "--help"], tmp_path)
         assert result.returncode == 0
         assert DISCLAIMER in result.stdout

@@ -7,7 +7,7 @@ name = "safemask-knee"
 version = "0.1.0"
 description = "Research-only study-grouped audit and selective-label toolkit for RSNA knee MRI label releases"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 license = {file = "LICENSE"}
 authors = [{name = "SafeMask-Knee contributors"}]
 keywords = ["research", "statistics", "selective labels", "knee MRI", "conformal"]

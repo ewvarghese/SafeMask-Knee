@@ -29,7 +29,31 @@ It writes preflight `outputs/doctor.json`, JSON status
 `outputs/training_summary.json`, research weights
 `outputs/debiased_training_weights.csv`, aggregate quality/sensitivity
 reports, and `reports/summary.md`. Runtime verification and training use **no
-network**. To view aggregate results in a **local read-only dashboard**:
+network**.
+
+**Windows / VS Code:** Running `bash` at a PowerShell prompt usually launches
+**WSL**, whose Linux Python is separate from Windows Python. The pinned stack
+supports **Python 3.10–3.13 (3.11 recommended)**, not WSL Python 3.14;
+installing `python3.14-venv` alone would leave you with incompatible wheels.
+The easiest route is to remain in **PowerShell** and use native Windows
+Python 3.11, **without bash**:
+
+```powershell
+py -3.11 -m venv --clear .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -e .
+.\.venv\Scripts\python.exe scripts\bootstrap_release.py --archive archive.zip --out data\release
+.\.venv\Scripts\python.exe -m safemask_knee doctor --release data\release --archive archive.zip --config configs\default.yaml
+.\.venv\Scripts\python.exe -m safemask_knee train --release data\release --config configs\default.yaml
+```
+
+`--clear` removes the failed/mixed virtual environment **only**, not the
+repository or source data; do not reuse one `.venv` across WSL and Windows.
+If you prefer WSL, install Python 3.11 and `python3.11-venv` **inside your WSL
+distribution** (if available from its package manager), then run
+`SAFEMASK_PYTHON=python3.11 bash scripts/run_release.sh` from a WSL terminal.
+The runner will rebuild a half-created `.venv`; it now rejects Python 3.14
+with an explicit explanation instead of proceeding to an incompatible pip
+install. To view aggregate results in a **local read-only dashboard**:
 
 ```bash
 .venv/bin/python -m safemask_knee dashboard --output-root outputs

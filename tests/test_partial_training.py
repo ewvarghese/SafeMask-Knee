@@ -52,7 +52,12 @@ def test_prediction_only_train_refuses_expert_metrics(release_dir: Path,
     assert summary["audit"]["accepted_expert_errors"] is None
     assert summary["weights"]["expert_truth_available"] is False
     assert summary["weights"]["propensity_heldout"] is True
+    assert summary["sensitivity"]["n_variants"] == 9
+    assert summary["quality"]["n_studies"] == 160
     root = working / "outputs"
+    assert (root / "run_provenance.json").exists()
+    assert (root / "quality/data_quality.md").exists()
+    assert (root / "sensitivity/sensitivity_report.md").exists()
     assert not (root / "clinical_risk_masks.csv").exists()
     assert not (root / "evaluation/metrics_by_strategy.csv").exists()
     w = pd.read_csv(root / "debiased_training_weights.csv")

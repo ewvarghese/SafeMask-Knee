@@ -31,5 +31,7 @@ if [[ -e data/release/expert_results.csv ]]; then
   exit 2
 fi
 mkdir -p outputs
+.venv/bin/python -m safemask_knee doctor --release data/release --archive archive.zip \
+  --config configs/default.yaml | tee outputs/doctor_cli_summary.json
 .venv/bin/python -m safemask_knee train --release data/release --config configs/default.yaml | tee outputs/training_summary.json
 echo "Training finished: reports/summary.md; outputs/debiased_training_weights.csv" >&2

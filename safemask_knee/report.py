@@ -371,6 +371,15 @@ def write_training_summary(data: ReleaseData, output_root: Path,
               "data/release --config configs/default.yaml`. Without that "
               "file, `masks`, `evaluate`, and `all` fail loudly rather than "
               "fabricate a conformal certificate.", "",
+              "## Additional diagnostics", "",
+              "`outputs/quality/data_quality.md` checks duplicate reports, "
+              "missing patient/demographic metadata and upstream exposure; "
+              "`outputs/sensitivity/sensitivity_report.md` compares alternative "
+              "IPCW floors and caps without using truth. "
+              "`outputs/run_provenance.json` records code/config/runtime versions "
+              "and source hashes without source rows. Launch the optional "
+              "read-only aggregate viewer via `python -m safemask_knee dashboard "
+              "--output-root outputs`; it does not serve raw inputs or weights.", "",
               "## Attribution and limits", "",
               source_licence_note + "Generated labels/weights may inherit "
               "source-data restrictions. MIT licenses the toolkit *code only*. "

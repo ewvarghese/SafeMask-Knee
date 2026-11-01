@@ -25,10 +25,22 @@ requirements if missing (installation may access a package index), checks the
 **bundled** `archive.zip` SHA-256 and all **26** member hashes against
 `FILES.json`, extracts only required inputs into Git-ignored `data/release/`,
 and runs label-free training. Subsequent runs reuse the verified local inputs.
-It writes a JSON status to `outputs/training_summary.json`, weights to
-`outputs/debiased_training_weights.csv`, and the report to
-`reports/summary.md`. Runtime verification and training use **no network**.
-If dependencies are already installed and you prefer separate steps:
+It writes preflight `outputs/doctor.json`, JSON status
+`outputs/training_summary.json`, research weights
+`outputs/debiased_training_weights.csv`, aggregate quality/sensitivity
+reports, and `reports/summary.md`. Runtime verification and training use **no
+network**. To view aggregate results in a **local read-only dashboard**:
+
+```bash
+.venv/bin/python -m safemask_knee dashboard --output-root outputs
+# Open http://127.0.0.1:8765/ in your browser; Ctrl-C stops the server.
+```
+
+Only `/` and aggregated `/api/summary` and `/healthz` are served; raw release
+CSVs, study IDs, weights, expert labels and images cannot be downloaded from
+this server. If forwarding a Codespaces port, keep it **private**. For a remote
+preview, explicitly bind `--host 0.0.0.0 --port 8765`; the default is loopback
+only. If dependencies are already installed and you prefer separate steps:
 
 ```bash
 python scripts/bootstrap_release.py --archive archive.zip --out data/release
@@ -52,6 +64,24 @@ risk mask is estimable** without real per-study expert outcomes; `all`,
 nearly deterministic confidence-ranked subset, check the propensity floor/
 ceiling rates and overlap warning in the partial report before using weights.
 
+### Run from GitHub, safely
+
+- **Codespaces:** GitHub → **Code → Codespaces → Create codespace**. The
+  `.devcontainer/devcontainer.json` installs pinned Python 3.11 dependencies,
+  verifies/extracts the bundled archive, and runs `doctor` on creation. In the
+  Codespace terminal run `bash scripts/run_release.sh`; optionally start the
+  read-only dashboard with `python -m safemask_knee dashboard --host 0.0.0.0`.
+  Keep its forwarded port private. Download your private results from the
+  Codespace; Git never includes generated weights/release inputs.
+- **Actions:** Once the workflow is on the default branch, open **Actions →
+  Research toolkit checks → Run workflow** with `run_training` enabled. PRs and
+  pushes run tests; a manual dispatch additionally verifies the archive and
+  runs label-free training. It uploads **only**
+  `outputs/ci/public_summary.json`, a small allowlisted, ID-free aggregate
+  summary. **No raw data, per-study outputs, weights, expert answers or masks
+  are published as CI artifacts.** The source's CC BY-NC 4.0 and other data
+  licence terms still apply.
+
 If you have the *separately licensed official* competition `train.csv` locally,
 convert only the release's 58 development studies without copying the source
 file into this repository:
@@ -65,6 +95,31 @@ The second run can then generate the risk-mask CSV and outer-fold expert-panel
 reports. The source used that panel in development: even with grouped CV,
 results are not independent clinical validation. If no official train.csv is
 available, the **partial training artifact is the honest endpoint**.
+
+### Additional, disjoint expert-labeled cohort (requires independent inputs)
+
+After a complete `all` run using the **official** 58 development studies, an
+additional outcome audit can apply the **frozen development-panel cutoffs** to
+new studies. Supply a *different* release-style directory containing all three
+score/confidence/accepted CSVs with 11 findings per new study, plus a separate
+licensed long truth CSV (`StudyInstanceUID,finding,expert_label`). External
+scores must be generated without consulting those external answers; their study
+IDs must not appear **anywhere** in the source release. Known patient/report
+cluster overlap is refused.
+
+```bash
+.venv/bin/python -m safemask_knee external-evaluate \
+  --release data/release --external-release /secure/external_scores \
+  --external-labels /secure/external_results.csv --config configs/default.yaml
+```
+
+The resulting aggregate files are in `outputs/external_evaluation/`; they
+contain no external IDs or labels. The tool **cannot verify** a user's upstream
+score provenance or unknown repeated patients, and cannot claim independent
+clinical validation, risk certification, or 1% error control. Without the
+official development-panel key, this command deliberately fails. It never
+uses external labels to fit cutoffs. No new MRI model can be trained from the
+bundled CSV-only archive.
 
 ## Three-command quickstart (with expert labels)
 
@@ -95,14 +150,18 @@ when missing; expert evaluation is needed to make the requested audit and masks.
 ### Commands
 
 ```bash
-python -m safemask_knee schema   --release "<RELEASE_DIR>" --out outputs/schema.json
-python -m safemask_knee train    --release "<RELEASE_DIR>" --config configs/default.yaml  # without expert truth
-python -m safemask_knee audit    --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/audit
-python -m safemask_knee weights  --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/debiased_training_weights.csv
-python -m safemask_knee masks    --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/clinical_risk_masks.csv
-python -m safemask_knee evaluate --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/evaluation
-python -m safemask_knee report   --release "<RELEASE_DIR>" --out reports/summary.md
-python -m safemask_knee all      --release "<RELEASE_DIR>" --config configs/default.yaml
+python -m safemask_knee doctor      --release "<RELEASE_DIR>" --archive archive.zip
+python -m safemask_knee schema      --release "<RELEASE_DIR>" --out outputs/schema.json
+python -m safemask_knee quality     --release "<RELEASE_DIR>" --out outputs/quality
+python -m safemask_knee train       --release "<RELEASE_DIR>" --config configs/default.yaml  # without expert truth
+python -m safemask_knee audit       --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/audit
+python -m safemask_knee weights     --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/debiased_training_weights.csv
+python -m safemask_knee sensitivity --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/sensitivity
+python -m safemask_knee masks       --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/clinical_risk_masks.csv
+python -m safemask_knee evaluate    --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/evaluation
+python -m safemask_knee report      --release "<RELEASE_DIR>" --out reports/summary.md
+python -m safemask_knee all         --release "<RELEASE_DIR>" --config configs/default.yaml
+python -m safemask_knee dashboard   --output-root outputs  # read-only local viewer
 ```
 
 Each invocation prints a **source → canonical column-mapping table to stderr**
@@ -159,7 +218,12 @@ Audit/evaluation CSV tables have their own explanatory columns (including
 rather than only pooled tier risks); markdown reports include explicit
 study-CV, bias, uncertainty, and licence caveats. See
 `outputs/schema.json` for the exact observed input mapping and validation
-counts. `outputs/README.md` documents the artifact paths.
+counts. `outputs/quality/data_quality.md` has aggregate duplicate/report,
+metadata, and upstream-exposure diagnostics; `outputs/sensitivity/` compares
+IPCW floors/caps on the **same clipped OOF probabilities** (never proof of
+bias correction). `outputs/run_provenance.json` records input hashes,
+config/seed, git revision and installed versions without source IDs.
+`outputs/README.md` documents the artifact paths.
 
 ### Example: *optional* downstream PyTorch training
 
@@ -263,8 +327,10 @@ the risk definitions, rank tests, bootstrap, IPCW assumptions, and limitations.
   `patient_id`, when present, keeps all a patient's studies in the same fold
   and bootstrap cluster; otherwise study_id is the clustering unit. No
   demographic stratum is imputed as fair. Expert CSV must have all 11 findings
-  per included study (not necessarily exactly 58: a different size triggers a
-  transparent warning and different sanity counts).
+  per included study; full expert-dependent `all` requires exactly 58 studies
+  / 638 pairs and verifies IDs against the development-panel metadata when
+  that marker is supplied. A different panel size may be inspected by
+  `schema` but is refused for a full run.
 - The published release may use a different binarization policy than `>=0.5`.
   Neither comparison nor reporting silently changes the published mask.
 - Library seeds and input hashes help reproduce runs on the same software/CPU;

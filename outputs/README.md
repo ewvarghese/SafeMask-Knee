@@ -2,11 +2,15 @@
 
 On a fresh checkout, run `bash scripts/run_release.sh` to verify/extract the
 bundled `archive.zip`, install missing dependencies, and run the prediction-only
-training stage. It also saves the CLI JSON result to `training_summary.json`.
+training stage. It saves the CLI JSON results to `doctor_cli_summary.json`
+and `training_summary.json`. The local read-only aggregate dashboard uses
+`quality/data_quality.json`, `propensity_diagnostics.json` and
+`sensitivity/sensitivity_overview.csv`; it cannot serve raw release files.
 
 `python -m safemask_knee train --release data/release --config configs/default.yaml`
 needs **no expert truth** and fits grouped acceptance propensities, writes
-`schema.json`, `data_manifest.json`, the label-free `audit/`,
+`schema.json`, `data_manifest.json`, `run_provenance.json`,
+aggregate `quality/` and label-free `audit/`, `sensitivity/`,
 `debiased_training_weights.csv`, `propensity_diagnostics.json`, and a **partial**
 `reports/summary.md`. It does **not** create a risk mask or expert-label
 accuracy. Run this on the supplied prediction-only archive.

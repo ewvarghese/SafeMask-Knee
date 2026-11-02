@@ -310,4 +310,27 @@ Codespaces container installs dependencies and locally verifies/extracts the
 archive; initial installation may require internet, but toolkit runtime does
 not. Source CC BY-NC 4.0 and third-party Kaggle terms still apply.
 
+## 9. What independent local verification can and cannot check
+
+`verify --release ... --archive archive.zip --recompute` authenticates the
+bundled archive against the source-pinned SHA-256, hashes **every** ZIP member,
+checks extracted inputs against it and compares every live source file to the
+saved run manifest. It revalidates the 11-finding schema, run config/seed and
+pinned direct dependencies, compares aggregate quality and saved weight
+properties, and checks that expert-dependent artifacts are absent when expert
+truth is unavailable. If requested, a fresh **study/patient/report-grouped**
+propensity fit is compared with the saved weights using documented numeric
+tolerances rather than demanding bit-for-bit Windows/Linux identity. It does
+not replace the trained artifacts or write to the source release.
+
+The resulting report is **aggregate-only**; CI uploads only a stricter
+allowlisted summary with digest fingerprints, never input rows or study IDs.
+For other separately licensed releases with no pinned archive, matching a
+self-recorded manifest establishes *local consistency*, not independently
+authenticated provenance. Even a perfectly matching archive, schema and
+numerical refit cannot test whether a weak label is true, discover an unknown
+repeated patient, or certify a clinical mask or 1%-per-finding risk guarantee.
+Those require genuinely independent expert truth and study/patient-level
+external validation. Hashes identify bytes, not label quality or data rights.
+
 For research only; not for clinical use; requires expert radiologist oversight; statistical guarantees are not clinical guarantees.

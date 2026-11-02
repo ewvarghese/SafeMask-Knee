@@ -256,7 +256,9 @@ def write_training_summary(data: ReleaseData, output_root: Path,
     accepted = weights.loc[weights.accepted60.eq(1)]
     diagnostic = json.loads((output_root / "propensity_diagnostics.json").read_text(
         encoding="utf-8"))["summary"]
-    source_studies = pd.DataFrame()
+    # Keep the release columns even when the optional development marker is
+    # absent; zero *identified* studies does not mean no development reuse.
+    source_studies = data.frame.iloc[:0]
     if "official_expert_evaluation_row" in data.frame:
         source_studies = data.frame.loc[
             data.frame.official_expert_evaluation_row.astype(str).eq("1")]
@@ -337,6 +339,9 @@ def write_training_summary(data: ReleaseData, output_root: Path,
         ess = sub.sum() ** 2 / (sub ** 2).sum() if len(sub) else float("nan")
         lines.append(f"| {row.finding} | {row.all_acceptance_rate:.2%} | "
                      f"{sub.quantile(.95):.3f} | {ess:.1f} |")
+    if "official_expert_evaluation_row" not in data.frame:
+        lines += ["", "Source metadata have no official-development marker: "
+                  "zero *identified* studies does not establish independence."]
     lines += ["", "## What the source reports versus what was verified here", "",
               "We independently checked input hashes/schema, fitted "
               "propensities and acceptance coverage. **We cannot reproduce "

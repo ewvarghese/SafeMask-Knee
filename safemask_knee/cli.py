@@ -26,6 +26,7 @@ from .quality import write_quality
 from .review import write_review_plan
 from .report import write_summary, write_training_summary
 from .sensitivity import write_sensitivity
+from .verification import verify_local, write_verification
 from .weights import write_weights
 
 LOG = logging.getLogger(__name__)
@@ -59,6 +60,8 @@ def _parse() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     help_text = {
         "doctor": "Preflight environment, archive, schema, licence and output access.",
+        "verify": "Read-only local hash/schema/weight checks and optional grouped refit; "
+                  "not clinical validation.",
         "schema": "Validate inputs; print column map; hash source files.",
         "quality": "Aggregate data-quality, duplicate and leakage diagnostics.",
         "audit": "Expert outcome selection and metadata fairness diagnostics.",
@@ -107,6 +110,11 @@ def _parse() -> argparse.ArgumentParser:
                               help="Optional bundled archive to verify if present")
             part.add_argument("--require-expert", action="store_true",
                               help="Fail preflight if official expert truth is missing")
+        if command == "verify":
+            part.add_argument("--archive", type=Path, default=None,
+                              help="Pin to bundled archive and verify every ZIP member")
+            part.add_argument("--recompute", action="store_true",
+                              help="Refit grouped CPU propensity/weights; compare numerically")
         if command == "external-evaluate":
             part.add_argument("--external-release", required=True, type=Path,
                               help="Separate frozen-score release for unseen studies")
@@ -115,7 +123,7 @@ def _parse() -> argparse.ArgumentParser:
         if command == "review-plan":
             part.add_argument("--groups", type=int, default=25,
                               help="Whole patient/study/report groups to shortlist (default 25)")
-        if command not in ("all", "train", "doctor", "review-plan"):
+        if command not in ("all", "train", "doctor", "review-plan", "verify"):
             part.add_argument("--out", default=None, metavar="PATH",
                               help=f"Output path (default {defaults[command]})")
     return parser
@@ -189,6 +197,15 @@ def _execute(args: argparse.Namespace) -> dict[str, Any]:
         _data, diagnostics = check_doctor(args.release, cfg, root, args.archive,
                                           require_expert=args.require_expert)
         return {"command": "doctor", **write_doctor(diagnostics, root)}
+    if args.command == "verify":
+        data = load_release(args.release, cfg, print_mapping=True,
+                            require_expert=False)
+        record = verify_local(data, cfg, root, args.archive, recompute=args.recompute)
+        result = write_verification(record, root)
+        if result["checks_failed"]:
+            raise ValueError("Local integrity checks failed; see "
+                             f"{result['report']} (no training artifacts changed)")
+        return {"command": "verify", **result}
     if args.command == "review-plan":
         data = _prepare(args, cfg, root, verify_only=True)
         result = write_review_plan(data, root / "debiased_training_weights.csv",

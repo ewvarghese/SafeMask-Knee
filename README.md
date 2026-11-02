@@ -122,6 +122,44 @@ them to Actions/dashboard. The command refuses to overwrite an existing plan
 so that filled-in annotations are not accidentally lost. With no available
 expert truth, no outcome-based certification is possible.
 
+### Let another researcher verify the inputs and results offline
+
+After `train`, run this in **VS Code PowerShell** from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m safemask_knee verify --release data\release --config configs\default.yaml --archive archive.zip --recompute
+```
+
+On Linux/macOS/WSL use `.venv/bin/python` and forward-slash paths. The
+read-only verifier **rehashes all local inputs, the pinned archive and every
+ZIP member**, checks the printed 11-finding column mapping, saved source and
+config/provenance hashes, duplicate/quality aggregates, exact downstream
+weight schema and bounds, study-group fold consistency and per-finding weight
+normalization. `--recompute` additionally refits the seeded grouped acceptance
+models and compares numeric weights with cross-platform tolerance; this may
+take several minutes on a laptop. It never modifies training weights, input
+files, the review queue or expert annotations. A failure exits nonzero and
+writes the failed check in an **ID-free** report:
+
+- `outputs/verification/verification.md` — human-readable checklist and
+  per-finding acceptance/weight-stability aggregates.
+- `outputs/verification/verification.json` — machine-readable statuses and
+  SHA-256 fingerprints, not study IDs or source rows.
+
+Another researcher must independently obtain an appropriately licensed copy
+of the same inputs and run the command locally before comparing fingerprints.
+The canonical input-inventory digest ignores JSON line endings; Windows/Linux
+weight-CSV byte hashes may legitimately differ even if the numeric refit passes.
+If using a different local release without the pinned archive, **omit
+`--archive`**: the result is only local consistency against its own manifest,
+not authentication of a shared source. Hashes, matching weight computations
+and the dashboard **cannot verify MRI diagnoses, expert-label correctness,
+patient independence, accuracy or a clinical risk bound**; that requires
+separately licensed expert truth and genuinely external studies. Do not upload
+restricted release CSVs, the full weights or ID-bearing review templates.
+The manual GitHub Action runs this check and publishes only an allowlisted
+aggregate status/fingerprint summary, not the data or full verification files.
+
 ### Run from GitHub, safely
 
 - **Codespaces:** GitHub → **Code → Codespaces → Create codespace**. The
@@ -133,8 +171,9 @@ expert truth, no outcome-based certification is possible.
   Codespace; Git never includes generated weights/release inputs.
 - **Actions:** Once the workflow is on the default branch, open **Actions →
   Research toolkit checks → Run workflow** with `run_training` enabled. PRs and
-  pushes run tests; a manual dispatch additionally verifies the archive and
-  runs label-free training. It uploads **only**
+  pushes run tests; a manual dispatch additionally verifies the archive,
+  runs label-free training and performs the offline integrity/numeric refit
+  checklist. It uploads **only**
   `outputs/ci/public_summary.json`, a small allowlisted, ID-free aggregate
   summary. **No raw data, per-study outputs, weights, expert answers or masks
   are published as CI artifacts.** The source's CC BY-NC 4.0 and other data
@@ -209,6 +248,7 @@ when missing; expert evaluation is needed to make the requested audit and masks.
 
 ```bash
 python -m safemask_knee doctor      --release "<RELEASE_DIR>" --archive archive.zip
+python -m safemask_knee verify      --release "<RELEASE_DIR>" --archive archive.zip --recompute
 python -m safemask_knee schema      --release "<RELEASE_DIR>" --out outputs/schema.json
 python -m safemask_knee quality     --release "<RELEASE_DIR>" --out outputs/quality
 python -m safemask_knee train       --release "<RELEASE_DIR>" --config configs/default.yaml  # without expert truth

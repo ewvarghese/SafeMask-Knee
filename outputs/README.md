@@ -25,6 +25,14 @@ or uploaded by CI, and must stay private and out of Git. It is neither a random
 sample nor a clinical mask, and needs independent expert review of separately
 licensed MRI images before any truth labels exist.
 
+`python -m safemask_knee verify --release data/release --archive archive.zip
+--recompute` performs a read-only source/archive/weights audit and an optional
+study-grouped numeric refit. `verification/verification.md` and
+`verification/verification.json` contain only aggregate counts, finding names,
+check results and SHA-256 fingerprints—not study IDs or row data. A mismatch
+fails loudly; no clinical truth or MRI diagnosis is certified. Other
+researchers must obtain and verify their own appropriately licensed data.
+
 Only with genuine separately licensed official expert answers,
 `python -m safemask_knee all --release <RELEASE_DIR> --config configs/default.yaml`
 writes `schema.json`, `data_manifest.json`, `audit/`, the two downstream CSVs,

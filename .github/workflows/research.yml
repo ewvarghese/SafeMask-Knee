@@ -47,6 +47,14 @@ jobs:
           cache: pip
       - name: Verify bundled archive and fit grouped acceptance/IPCW
         run: bash scripts/run_release.sh
+      - name: Audit source hashes and numerically reproduce saved weights
+        env:
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+          PYTHONHASHSEED: '20261101'
+        run: |
+          .venv/bin/python -m safemask_knee verify --release data/release \
+            --config configs/default.yaml --archive archive.zip --recompute
       - name: Make safe aggregate-only run summary
         run: |
           .venv/bin/python scripts/summarize_ci.py --root outputs --out outputs/ci/public_summary.json

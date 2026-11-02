@@ -134,6 +134,9 @@ def _dashboard_fixture(root: Path) -> None:
 def test_dashboard_http_only_serves_aggregate_allowlist(tmp_path: Path) -> None:
     root = tmp_path / "outputs"
     _dashboard_fixture(root)
+    (root / "review_plan").mkdir()
+    (root / "review_plan/review_queue.csv").write_text(
+        "study_id\nSECRET-UID-001\n", encoding="utf-8")
     snapshot = dashboard_snapshot(root)
     serialized = json.dumps(snapshot, allow_nan=False)
     assert len(snapshot["findings"]) == 11
@@ -151,7 +154,8 @@ def test_dashboard_http_only_serves_aggregate_allowlist(tmp_path: Path) -> None:
             assert response.headers["Cache-Control"] == "no-store"
         with urllib.request.urlopen(base + "/api/summary") as response:
             assert json.loads(response.read())["n_pairs"] == 22
-        for path in ("/outputs/debiased_training_weights.csv", "/data/release/expert_oof.csv"):
+        for path in ("/outputs/debiased_training_weights.csv", "/data/release/expert_oof.csv",
+                     "/review_plan/review_queue.csv"):
             with pytest.raises(urllib.error.HTTPError) as error:
                 urllib.request.urlopen(base + path)
             assert error.value.code == 404
@@ -168,6 +172,9 @@ def test_dashboard_http_only_serves_aggregate_allowlist(tmp_path: Path) -> None:
 def test_safe_ci_export_and_repository_configs(tmp_path: Path) -> None:
     root = tmp_path / "outputs"
     _dashboard_fixture(root)
+    (root / "review_plan").mkdir()
+    (root / "review_plan/review_queue.csv").write_text(
+        "study_id\nSECRET-UID-001\n", encoding="utf-8")
     record = write_public_summary(root, root / "ci/public_summary.json")
     text = (root / "ci/public_summary.json").read_text()
     assert "SECRET-UID-001" not in text and "study_id" not in text

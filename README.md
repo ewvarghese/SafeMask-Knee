@@ -88,6 +88,40 @@ risk mask is estimable** without real per-study expert outcomes; `all`,
 nearly deterministic confidence-ranked subset, check the propensity floor/
 ceiling rates and overlap warning in the partial report before using weights.
 
+### A useful next step: plan independent expert review
+
+The label-free CSVs cannot train an MRI image model or estimate real accuracy.
+To **use the completed run now**, create a **private, research-only study-level
+annotation worklist** from its saved OOF propensities and weights. From the
+same VS Code **PowerShell** terminal where training succeeded:
+
+```powershell
+.\.venv\Scripts\python.exe -m safemask_knee review-plan --release data\release --config configs\default.yaml --groups 25
+```
+
+On Linux/macOS/WSL with a compatible Python, replace the interpreter with
+`.venv/bin/python` and use forward-slash paths. No network or MRI files are
+needed to **create** the worklist. The command checks input/config hashes and
+the exact saved weights schema, excludes complete connected patient/report
+clusters touching marked development or already expert-labeled studies, and
+keeps all 11 findings per study. It creates **only local, Git-ignored files**:
+
+- `outputs/review_plan/review_queue.csv`: study IDs and selection diagnostics
+  for an authorized research coordinator. `--groups` counts whole connected
+  groups, so there may be more than 25 study rows.
+- `outputs/review_plan/expert_label_template.csv`: study IDs with **blank**
+  columns for the 11 findings, with no weak predictions shown to the expert.
+- `outputs/review_plan/review_plan.md`: ID-free explanation and limitations.
+
+The priority is a fixed **targeted selection/ambiguity heuristic**, not a
+medical risk score or a random sample; filling the template requires
+**separately licensed MRI scans and an independent radiologist**. Do not copy
+weak labels into it. It cannot by itself validate accuracy, fairness, recall,
+prevalence, or a clinical mask. Do not publish these ID-bearing files or upload
+them to Actions/dashboard. The command refuses to overwrite an existing plan
+so that filled-in annotations are not accidentally lost. With no available
+expert truth, no outcome-based certification is possible.
+
 ### Run from GitHub, safely
 
 - **Codespaces:** GitHub → **Code → Codespaces → Create codespace**. The
@@ -178,6 +212,7 @@ python -m safemask_knee doctor      --release "<RELEASE_DIR>" --archive archive.
 python -m safemask_knee schema      --release "<RELEASE_DIR>" --out outputs/schema.json
 python -m safemask_knee quality     --release "<RELEASE_DIR>" --out outputs/quality
 python -m safemask_knee train       --release "<RELEASE_DIR>" --config configs/default.yaml  # without expert truth
+python -m safemask_knee review-plan --release "<RELEASE_DIR>" --groups 25  # private annotation worklist
 python -m safemask_knee audit       --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/audit
 python -m safemask_knee weights     --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/debiased_training_weights.csv
 python -m safemask_knee sensitivity --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/sensitivity

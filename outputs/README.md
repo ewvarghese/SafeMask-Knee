@@ -15,6 +15,24 @@ aggregate `quality/` and label-free `audit/`, `sensitivity/`,
 `reports/summary.md`. It does **not** create a risk mask or expert-label
 accuracy. Run this on the supplied prediction-only archive.
 
+After training, `python -m safemask_knee review-plan --release data/release
+--groups 25` uses the saved weights to write a **private**, targeted annotation
+worklist to `review_plan/review_queue.csv`, a blank 11-finding
+`review_plan/expert_label_template.csv` and an ID-free explanatory
+`review_plan/review_plan.md`. It excludes entire known development/patient/
+report groups. The queue contains study IDs: it is not served by the dashboard
+or uploaded by CI, and must stay private and out of Git. It is neither a random
+sample nor a clinical mask, and needs independent expert review of separately
+licensed MRI images before any truth labels exist.
+
+`python -m safemask_knee verify --release data/release --archive archive.zip
+--recompute` performs a read-only source/archive/weights audit and an optional
+study-grouped numeric refit. `verification/verification.md` and
+`verification/verification.json` contain only aggregate counts, finding names,
+check results and SHA-256 fingerprints—not study IDs or row data. A mismatch
+fails loudly; no clinical truth or MRI diagnosis is certified. Other
+researchers must obtain and verify their own appropriately licensed data.
+
 Only with genuine separately licensed official expert answers,
 `python -m safemask_knee all --release <RELEASE_DIR> --config configs/default.yaml`
 writes `schema.json`, `data_manifest.json`, `audit/`, the two downstream CSVs,

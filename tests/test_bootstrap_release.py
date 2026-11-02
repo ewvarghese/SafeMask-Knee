@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -73,3 +76,44 @@ def test_runner_has_strict_order_and_offline_runtime() -> None:
     assert runner.index("bootstrap_release.py") < runner.index("-m safemask_knee train")
     assert "OPENBLAS_NUM_THREADS=1" in runner
     assert "outputs/training_summary.json" in runner
+
+
+def test_runner_explains_missing_ensurepip_and_partial_venv(tmp_path: Path) -> None:
+    """Bash from PowerShell uses WSL: fail with actionable distro-package help."""
+    project = tmp_path / "invented-project"
+    (project / "scripts").mkdir(parents=True)
+    (project / ".venv/bin").mkdir(parents=True)
+    source = Path(__file__).resolve().parents[1] / "scripts/run_release.sh"
+    shutil.copyfile(source, project / "scripts/run_release.sh")
+    # Represents the half-created Python executable left by a failed venv.
+    partial_python = project / ".venv/bin/python"
+    partial_python.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    partial_python.chmod(0o755)
+    fake = project / "fake-bin"
+    fake.mkdir()
+    python3 = fake / "python3"
+    python3.write_text("#!/bin/sh\n"
+                       "if [ \"$1\" = -c ]; then\n"
+                       "  case \"$2\" in\n"
+                       "    *sys.exit*) [ \"$FAKE_MINOR\" != 3.14 ]; exit $?;;\n"
+                       "    *) echo \"$FAKE_MINOR\"; exit 0;;\n"
+                       "  esac\n"
+                       "fi\n"
+                       "echo 'ensurepip is not available' >&2\nexit 1\n", encoding="utf-8")
+    python3.chmod(0o755)
+    for name in ("python3.11", "python3.12", "python3.13", "python3.10"):
+        (fake / name).symlink_to(python3)
+    env = dict(os.environ, PATH=str(fake) + os.pathsep + os.environ.get("PATH", ""),
+               FAKE_MINOR="3.11")
+    outcome = subprocess.run(["bash", "scripts/run_release.sh"], cwd=project,
+                             env=env, capture_output=True, text=True, timeout=20)
+    assert outcome.returncode == 2
+    assert "python3.11-venv" in outcome.stderr
+    assert "PowerShell" in outcome.stderr
+    assert "Then rerun: bash scripts/run_release.sh" in outcome.stderr
+    env["FAKE_MINOR"] = "3.14"
+    unsupported = subprocess.run(["bash", "scripts/run_release.sh"], cwd=project,
+                                 env=env, capture_output=True, text=True, timeout=20)
+    assert unsupported.returncode == 2
+    assert "Python 3.14 is incompatible" in unsupported.stderr
+    assert "python3.14-venv" not in unsupported.stderr

@@ -23,8 +23,10 @@ from .io import (ReleaseData, SchemaError, expert_fold_map, load_release,
 from .masks import write_masks
 from .provenance import config_hash, write_provenance
 from .quality import write_quality
+from .review import write_review_plan
 from .report import write_summary, write_training_summary
 from .sensitivity import write_sensitivity
+from .verification import verify_local, write_verification
 from .weights import write_weights
 
 LOG = logging.getLogger(__name__)
@@ -58,6 +60,8 @@ def _parse() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     help_text = {
         "doctor": "Preflight environment, archive, schema, licence and output access.",
+        "verify": "Read-only local hash/schema/weight checks and optional grouped refit; "
+                  "not clinical validation.",
         "schema": "Validate inputs; print column map; hash source files.",
         "quality": "Aggregate data-quality, duplicate and leakage diagnostics.",
         "audit": "Expert outcome selection and metadata fairness diagnostics.",
@@ -69,6 +73,8 @@ def _parse() -> argparse.ArgumentParser:
         "report": "Summarize existing artifacts, including partial truth-free training.",
         "train": "Fit grouped acceptance propensity and IPCW without expert truth; "
                  "abstain from conformal masks.",
+        "review-plan": "Make a private study-group shortlist and blank 11-finding "
+                       "expert annotation template; not a validation sample.",
         "all": "Run schema -> audit -> weights -> masks -> evaluate -> report "
                "(expert truth required).",
         "dashboard": "Serve a read-only aggregate research dashboard.",
@@ -104,12 +110,20 @@ def _parse() -> argparse.ArgumentParser:
                               help="Optional bundled archive to verify if present")
             part.add_argument("--require-expert", action="store_true",
                               help="Fail preflight if official expert truth is missing")
+        if command == "verify":
+            part.add_argument("--archive", type=Path, default=None,
+                              help="Pin to bundled archive and verify every ZIP member")
+            part.add_argument("--recompute", action="store_true",
+                              help="Refit grouped CPU propensity/weights; compare numerically")
         if command == "external-evaluate":
             part.add_argument("--external-release", required=True, type=Path,
                               help="Separate frozen-score release for unseen studies")
             part.add_argument("--external-labels", required=True, type=Path,
                               help="Separately licensed 11-finding expert truth CSV/JSON")
-        if command not in ("all", "train", "doctor"):
+        if command == "review-plan":
+            part.add_argument("--groups", type=int, default=25,
+                              help="Whole patient/study/report groups to shortlist (default 25)")
+        if command not in ("all", "train", "doctor", "review-plan", "verify"):
             part.add_argument("--out", default=None, metavar="PATH",
                               help=f"Output path (default {defaults[command]})")
     return parser
@@ -183,6 +197,20 @@ def _execute(args: argparse.Namespace) -> dict[str, Any]:
         _data, diagnostics = check_doctor(args.release, cfg, root, args.archive,
                                           require_expert=args.require_expert)
         return {"command": "doctor", **write_doctor(diagnostics, root)}
+    if args.command == "verify":
+        data = load_release(args.release, cfg, print_mapping=True,
+                            require_expert=False)
+        record = verify_local(data, cfg, root, args.archive, recompute=args.recompute)
+        result = write_verification(record, root)
+        if result["checks_failed"]:
+            raise ValueError("Local integrity checks failed; see "
+                             f"{result['report']} (no training artifacts changed)")
+        return {"command": "verify", **result}
+    if args.command == "review-plan":
+        data = _prepare(args, cfg, root, verify_only=True)
+        result = write_review_plan(data, root / "debiased_training_weights.csv",
+                                   root / "review_plan", args.groups, cfg["seed"])
+        return {"command": "review-plan", **result}
     if args.command == "report":
         data = _prepare(args, cfg, root, verify_only=True)
         target = _target(args, root, "reports/summary.md") if args.out else Path(
@@ -275,7 +303,7 @@ def main() -> None:
     args = parser.parse_args()
     try:
         summary = _execute(args)
-    except (SchemaError, ValueError, FileNotFoundError, AssertionError) as exc:
+    except (SchemaError, ValueError, FileNotFoundError, FileExistsError, AssertionError) as exc:
         LOG.exception("SafeMask-Knee failed: %s", exc)
         parser.exit(2, f"ERROR: {exc}\n")
     print(json.dumps(summary, separators=(",", ":"), allow_nan=False))

@@ -29,7 +29,31 @@ It writes preflight `outputs/doctor.json`, JSON status
 `outputs/training_summary.json`, research weights
 `outputs/debiased_training_weights.csv`, aggregate quality/sensitivity
 reports, and `reports/summary.md`. Runtime verification and training use **no
-network**. To view aggregate results in a **local read-only dashboard**:
+network**.
+
+**Windows / VS Code:** Running `bash` at a PowerShell prompt usually launches
+**WSL**, whose Linux Python is separate from Windows Python. The pinned stack
+supports **Python 3.10–3.13 (3.11 recommended)**, not WSL Python 3.14;
+installing `python3.14-venv` alone would leave you with incompatible wheels.
+The easiest route is to remain in **PowerShell** and use native Windows
+Python 3.11, **without bash**:
+
+```powershell
+py -3.11 -m venv --clear .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -e .
+.\.venv\Scripts\python.exe scripts\bootstrap_release.py --archive archive.zip --out data\release
+.\.venv\Scripts\python.exe -m safemask_knee doctor --release data\release --archive archive.zip --config configs\default.yaml
+.\.venv\Scripts\python.exe -m safemask_knee train --release data\release --config configs\default.yaml
+```
+
+`--clear` removes the failed/mixed virtual environment **only**, not the
+repository or source data; do not reuse one `.venv` across WSL and Windows.
+If you prefer WSL, install Python 3.11 and `python3.11-venv` **inside your WSL
+distribution** (if available from its package manager), then run
+`SAFEMASK_PYTHON=python3.11 bash scripts/run_release.sh` from a WSL terminal.
+The runner will rebuild a half-created `.venv`; it now rejects Python 3.14
+with an explicit explanation instead of proceeding to an incompatible pip
+install. To view aggregate results in a **local read-only dashboard**:
 
 ```bash
 .venv/bin/python -m safemask_knee dashboard --output-root outputs
@@ -64,6 +88,78 @@ risk mask is estimable** without real per-study expert outcomes; `all`,
 nearly deterministic confidence-ranked subset, check the propensity floor/
 ceiling rates and overlap warning in the partial report before using weights.
 
+### A useful next step: plan independent expert review
+
+The label-free CSVs cannot train an MRI image model or estimate real accuracy.
+To **use the completed run now**, create a **private, research-only study-level
+annotation worklist** from its saved OOF propensities and weights. From the
+same VS Code **PowerShell** terminal where training succeeded:
+
+```powershell
+.\.venv\Scripts\python.exe -m safemask_knee review-plan --release data\release --config configs\default.yaml --groups 25
+```
+
+On Linux/macOS/WSL with a compatible Python, replace the interpreter with
+`.venv/bin/python` and use forward-slash paths. No network or MRI files are
+needed to **create** the worklist. The command checks input/config hashes and
+the exact saved weights schema, excludes complete connected patient/report
+clusters touching marked development or already expert-labeled studies, and
+keeps all 11 findings per study. It creates **only local, Git-ignored files**:
+
+- `outputs/review_plan/review_queue.csv`: study IDs and selection diagnostics
+  for an authorized research coordinator. `--groups` counts whole connected
+  groups, so there may be more than 25 study rows.
+- `outputs/review_plan/expert_label_template.csv`: study IDs with **blank**
+  columns for the 11 findings, with no weak predictions shown to the expert.
+- `outputs/review_plan/review_plan.md`: ID-free explanation and limitations.
+
+The priority is a fixed **targeted selection/ambiguity heuristic**, not a
+medical risk score or a random sample; filling the template requires
+**separately licensed MRI scans and an independent radiologist**. Do not copy
+weak labels into it. It cannot by itself validate accuracy, fairness, recall,
+prevalence, or a clinical mask. Do not publish these ID-bearing files or upload
+them to Actions/dashboard. The command refuses to overwrite an existing plan
+so that filled-in annotations are not accidentally lost. With no available
+expert truth, no outcome-based certification is possible.
+
+### Let another researcher verify the inputs and results offline
+
+After `train`, run this in **VS Code PowerShell** from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m safemask_knee verify --release data\release --config configs\default.yaml --archive archive.zip --recompute
+```
+
+On Linux/macOS/WSL use `.venv/bin/python` and forward-slash paths. The
+read-only verifier **rehashes all local inputs, the pinned archive and every
+ZIP member**, checks the printed 11-finding column mapping, saved source and
+config/provenance hashes, duplicate/quality aggregates, exact downstream
+weight schema and bounds, study-group fold consistency and per-finding weight
+normalization. `--recompute` additionally refits the seeded grouped acceptance
+models and compares numeric weights with cross-platform tolerance; this may
+take several minutes on a laptop. It never modifies training weights, input
+files, the review queue or expert annotations. A failure exits nonzero and
+writes the failed check in an **ID-free** report:
+
+- `outputs/verification/verification.md` — human-readable checklist and
+  per-finding acceptance/weight-stability aggregates.
+- `outputs/verification/verification.json` — machine-readable statuses and
+  SHA-256 fingerprints, not study IDs or source rows.
+
+Another researcher must independently obtain an appropriately licensed copy
+of the same inputs and run the command locally before comparing fingerprints.
+The canonical input-inventory digest ignores JSON line endings; Windows/Linux
+weight-CSV byte hashes may legitimately differ even if the numeric refit passes.
+If using a different local release without the pinned archive, **omit
+`--archive`**: the result is only local consistency against its own manifest,
+not authentication of a shared source. Hashes, matching weight computations
+and the dashboard **cannot verify MRI diagnoses, expert-label correctness,
+patient independence, accuracy or a clinical risk bound**; that requires
+separately licensed expert truth and genuinely external studies. Do not upload
+restricted release CSVs, the full weights or ID-bearing review templates.
+The manual GitHub Action runs this check and publishes only an allowlisted
+aggregate status/fingerprint summary, not the data or full verification files.
+
 ### Run from GitHub, safely
 
 - **Codespaces:** GitHub → **Code → Codespaces → Create codespace**. The
@@ -75,8 +171,9 @@ ceiling rates and overlap warning in the partial report before using weights.
   Codespace; Git never includes generated weights/release inputs.
 - **Actions:** Once the workflow is on the default branch, open **Actions →
   Research toolkit checks → Run workflow** with `run_training` enabled. PRs and
-  pushes run tests; a manual dispatch additionally verifies the archive and
-  runs label-free training. It uploads **only**
+  pushes run tests; a manual dispatch additionally verifies the archive,
+  runs label-free training and performs the offline integrity/numeric refit
+  checklist. It uploads **only**
   `outputs/ci/public_summary.json`, a small allowlisted, ID-free aggregate
   summary. **No raw data, per-study outputs, weights, expert answers or masks
   are published as CI artifacts.** The source's CC BY-NC 4.0 and other data
@@ -151,9 +248,11 @@ when missing; expert evaluation is needed to make the requested audit and masks.
 
 ```bash
 python -m safemask_knee doctor      --release "<RELEASE_DIR>" --archive archive.zip
+python -m safemask_knee verify      --release "<RELEASE_DIR>" --archive archive.zip --recompute
 python -m safemask_knee schema      --release "<RELEASE_DIR>" --out outputs/schema.json
 python -m safemask_knee quality     --release "<RELEASE_DIR>" --out outputs/quality
 python -m safemask_knee train       --release "<RELEASE_DIR>" --config configs/default.yaml  # without expert truth
+python -m safemask_knee review-plan --release "<RELEASE_DIR>" --groups 25  # private annotation worklist
 python -m safemask_knee audit       --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/audit
 python -m safemask_knee weights     --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/debiased_training_weights.csv
 python -m safemask_knee sensitivity --release "<RELEASE_DIR>" --config configs/default.yaml --out outputs/sensitivity

@@ -1,4 +1,4 @@
-# Direct dependencies pinned for repeatable CPU-only installation (Python >=3.10).
+# Direct dependencies pinned for CPU-only Python 3.10-3.13 (3.11 recommended).
 numpy==2.2.6
 pandas==2.2.3
 scikit-learn==1.6.1

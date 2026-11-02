@@ -120,7 +120,7 @@ def _dashboard_fixture(root: Path) -> None:
     (root / "sensitivity/sensitivity_summary.json").write_text(
         json.dumps({"n_variants": 1}))
     (root / "run_provenance.json").write_text(json.dumps({
-        "git_revision": "ABC", "config_sha256_canonical": "HASH",
+        "git_revision": "a" * 40, "config_sha256_canonical": "b" * 64,
         "PRIVATE_STUDY_ID": "SECRET-UID-001"}))
     pd.DataFrame([{"attribute": "report_script_bucket", "stratum": "A",
                    "n_studies": 8, "acceptance_rate": .5},
@@ -134,6 +134,9 @@ def _dashboard_fixture(root: Path) -> None:
 def test_dashboard_http_only_serves_aggregate_allowlist(tmp_path: Path) -> None:
     root = tmp_path / "outputs"
     _dashboard_fixture(root)
+    (root / "review_plan").mkdir()
+    (root / "review_plan/review_queue.csv").write_text(
+        "study_id\nSECRET-UID-001\n", encoding="utf-8")
     snapshot = dashboard_snapshot(root)
     serialized = json.dumps(snapshot, allow_nan=False)
     assert len(snapshot["findings"]) == 11
@@ -151,7 +154,8 @@ def test_dashboard_http_only_serves_aggregate_allowlist(tmp_path: Path) -> None:
             assert response.headers["Cache-Control"] == "no-store"
         with urllib.request.urlopen(base + "/api/summary") as response:
             assert json.loads(response.read())["n_pairs"] == 22
-        for path in ("/outputs/debiased_training_weights.csv", "/data/release/expert_oof.csv"):
+        for path in ("/outputs/debiased_training_weights.csv", "/data/release/expert_oof.csv",
+                     "/review_plan/review_queue.csv", "/verification/verification.json"):
             with pytest.raises(urllib.error.HTTPError) as error:
                 urllib.request.urlopen(base + path)
             assert error.value.code == 404
@@ -168,11 +172,40 @@ def test_dashboard_http_only_serves_aggregate_allowlist(tmp_path: Path) -> None:
 def test_safe_ci_export_and_repository_configs(tmp_path: Path) -> None:
     root = tmp_path / "outputs"
     _dashboard_fixture(root)
+    (root / "review_plan").mkdir()
+    (root / "review_plan/review_queue.csv").write_text(
+        "study_id\nSECRET-UID-001\n", encoding="utf-8")
     record = write_public_summary(root, root / "ci/public_summary.json")
     text = (root / "ci/public_summary.json").read_text()
     assert "SECRET-UID-001" not in text and "study_id" not in text
     assert record["clinical_mask_generated"] is False
+    assert record["verification_status"] == "not_run"
     assert DISCLAIMER in text and DISCLAIMER in (root / "ci/job_summary.md").read_text()
+    (root / "verification").mkdir()
+    (root / "verification/verification.json").write_text(json.dumps({
+        "status": "bundled_integrity_only_not_clinical_validation",
+        "checks": [{"check": "source_manifest", "result": "pass"},
+                   {"check": "saved_weights", "result": "pass"},
+                   {"check": "numeric_recomputation", "result": "pass"}],
+        "source_manifest_sha256": "a" * 64, "weights_sha256": "b" * 64,
+        "secret_study_id": "SECRET-UID-001"}))
+    verified = write_public_summary(root, root / "ci/public_summary.json")
+    text = (root / "ci/public_summary.json").read_text()
+    assert "SECRET-UID-001" not in text and "study_id" not in text
+    assert verified["recomputation_agrees"] is True
+    assert verified["verification_fingerprints"]["weights_sha256"] == "b" * 64
+    provenance_path = root / "run_provenance.json"
+    saved_provenance = provenance_path.read_text()
+    malicious = json.loads(saved_provenance)
+    malicious["git_revision"] = "SECRET-UID-001"
+    provenance_path.write_text(json.dumps(malicious))
+    with pytest.raises(ValueError, match="malformed code/config"):
+        public_summary(root)
+    provenance_path.write_text(saved_provenance)
+    (root / "verification/verification.json").write_text(json.dumps({
+        "status": "integrity_checks_failed", "secret_study_id": "SECRET-UID-001"}))
+    with pytest.raises(ValueError, match="failed/malformed"):
+        public_summary(root)
     with pytest.raises(ValueError, match="inside ignored outputs"):
         write_public_summary(root, tmp_path / "public.json")
     (root / "clinical_risk_masks.csv").write_text("not permitted")
@@ -183,7 +216,10 @@ def test_safe_ci_export_and_repository_configs(tmp_path: Path) -> None:
     devcontainer = json.loads((repo / ".devcontainer/devcontainer.json").read_text())
     assert "workflow_dispatch" in workflow and "run_training" in workflow
     assert ".venv/bin/python scripts/summarize_ci.py" in workflow
+    assert "safemask_knee verify --release data/release" in workflow
+    assert "--archive archive.zip --recompute" in workflow
     assert "outputs/ci/public_summary.json" in workflow
     assert "path: outputs/debiased_training_weights.csv" not in workflow
+    assert "path: outputs/verification/verification.json" not in workflow
     assert devcontainer["forwardPorts"] == [8765]
     assert "bootstrap_release.py" in devcontainer["postCreateCommand"]
